@@ -2,11 +2,11 @@
 
 Gentle medication check-ins that help Mochi's garden grow. Every dose you take plants something; every fully completed day makes a flower bloom and extends your streak. An optional community garden lets people cheer each other on without ever sharing medication names or health details.
 
-**Stack:** Node.js + Express API · Postgres · React 19 + Vite · cookie-based JWT sessions. Deploys to Vercel (static app on the CDN, API as one Vercel Function, database on Neon).
+**Stack:** Node.js + Express API · Postgres · React 19 + Vite · cookie-based JWT sessions. Deploys to Vercel as one project with two services: `client` (static Vite build) and `server` (Express as a Vercel Function), with the database on Neon.
 
 ## Deploy to Vercel
 
-1. **Import the repo.** In Vercel, choose *Add New → Project* and import `mochi-garden`. Leave the framework preset as *Other*; `vercel.json` already sets the install, build and output settings.
+1. **Import the repo.** In Vercel, choose *Add New → Project* and import `mochi-garden`. Vercel reads the two services from `vercel.json`: `/api/*` goes to `server`, everything else to `client`.
 2. **Add a database.** In the project, open *Storage → Create Database → Neon (Postgres)* and connect it to the project. Pick the **Singapore** region, since the API runs in Singapore (`sin1` in `vercel.json`). This sets `DATABASE_URL` for you. Tables are created automatically on the first request.
 3. **Add a session secret.** Under *Settings → Environment Variables*, add `JWT_SECRET` with a long random value, for example the output of `openssl rand -base64 32`.
 4. **Deploy** (or redeploy if the first build ran before steps 2 and 3). Check `https://<your-app>.vercel.app/api/health` returns `{"ok":true}`.
@@ -58,9 +58,9 @@ DATABASE_URL=postgres://… JWT_SECRET=change-me NODE_ENV=production npm start
 ## Project layout
 
 ```
-api/index.js       Vercel Function entry (wraps the Express app)
-vercel.json        install/build settings and /api rewrites
+vercel.json        Vercel services: client (Vite) and server (Express), /api routing
 server/
+  src/index.js     entry: exports the Express app (Vercel) or listens on PORT (local)
   src/db.js        Postgres schema, pg / PGlite connection
   src/logic.js     dose status, streaks, stats, garden
   src/time.js      time-zone-aware day helpers
