@@ -8,15 +8,15 @@ Gentle medication check-ins that help Mochi's garden grow. Every dose you take p
 
 1. **Import the repo.** In Vercel, choose *Add New → Project* and import `mochi-garden`. Vercel reads the two services from `vercel.json`: `/api/*` goes to `server`, everything else to `client`.
 2. **Add a database.** In the project, open *Storage → Create Database → Neon (Postgres)* and connect it to the project. Pick the **Singapore** region, since the API runs in Singapore (`sin1` in `vercel.json`). This sets `DATABASE_URL` for you. Tables are created automatically on the first request.
-3. **Add a session secret.** Under *Settings → Environment Variables*, add `JWT_SECRET` with a long random value, for example the output of `openssl rand -base64 32`.
-4. **Deploy** (or redeploy if the first build ran before steps 2 and 3). Check `https://<your-app>.vercel.app/api/health` returns `{"ok":true}`.
+3. **Optional: set your own session secret.** If you don't, the app generates a random one on first use and stores it in the database. To manage it yourself, add `JWT_SECRET` under *Settings → Environment Variables*.
+4. **Deploy** (or redeploy if the first build ran before the database was connected). Check `https://<your-app>.vercel.app/api/health` returns `{"ok":true}`.
 5. **Optional demo data.** From your computer, copy the database URL from the Neon integration and run:
    ```bash
    DATABASE_URL="postgres://…" npm run seed
    ```
    This refuses to run if the database already has accounts. Add `-- --reset` to wipe everything first, which also deletes real accounts.
 
-If `DATABASE_URL` or `JWT_SECRET` is missing, the API answers with a message saying which one to add.
+If `DATABASE_URL` is missing, the API answers with a message saying to add it.
 
 ## Run locally
 
@@ -35,13 +35,13 @@ To run the whole thing as one server (for example on a VPS):
 
 ```bash
 npm run build
-DATABASE_URL=postgres://… JWT_SECRET=change-me NODE_ENV=production npm start
+DATABASE_URL=postgres://… NODE_ENV=production npm start
 ```
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` (or `POSTGRES_URL`) | embedded PGlite | Postgres connection string. **Required** on Vercel/production. |
-| `JWT_SECRET` | dev-only value | Signs session cookies. **Required** in production. |
+| `JWT_SECRET` | generated and stored in the database | Signs session cookies. Optional; set it to manage the key yourself. |
 | `PORT` | `3001` | HTTP port for `npm start` |
 | `PG_POOL_MAX` | `5` | Max Postgres connections per server instance |
 

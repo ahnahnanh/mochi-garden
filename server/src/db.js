@@ -4,6 +4,11 @@ import path from 'node:path';
 import fs from 'node:fs';
 
 const SCHEMA = `
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -156,7 +161,7 @@ export async function openDb(url = databaseUrl()) {
     return db;
   }
 
-  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+  if (url !== 'memory://' && (process.env.VERCEL || process.env.NODE_ENV === 'production')) {
     throw new Error('DATABASE_URL is not set. Add a Postgres database (for example Neon from the Vercel Storage tab) and redeploy.');
   }
   const { PGlite } = await import('@electric-sql/pglite');

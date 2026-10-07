@@ -46,9 +46,6 @@ export function createApp(db, { clientDir } = {}) {
   const authLimit = rateLimit({ windowMs: 60_000, max: 20 });
 
   api.use(async (req, res, next) => {
-    if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-      return res.status(503).json({ error: 'JWT_SECRET is not set. Add it in your Vercel project’s Environment Variables and redeploy.' });
-    }
     try { req.db = await getDb(); next(); } catch (e) {
       console.error(e);
       res.status(503).json({ error: e.message.includes('DATABASE_URL') ? e.message : 'The database is unavailable right now. Please try again shortly.' });
@@ -71,7 +68,7 @@ export function createApp(db, { clientDir } = {}) {
       [body.name, body.email, hash, body.timezone]);
     if (!user) throw new HttpError(409, 'An account with that email already exists. Try signing in.');
     await req.db.run(`INSERT INTO group_members (group_id, user_id) SELECT id, $1 FROM community_groups WHERE slug = 'general-wellness' ON CONFLICT DO NOTHING`, [user.id]);
-    setSession(res, user.id);
+    await setSession(req, res, user.id);
     res.status(201).json({ user: publicUser(user) });
   });
 
@@ -79,7 +76,7 @@ export function createApp(db, { clientDir } = {}) {
     const body = z.object({ email: z.string().trim(), password: z.string() }).parse(req.body);
     const user = await req.db.one('SELECT * FROM users WHERE email = $1', [body.email.toLowerCase()]);
     if (!user || !(await bcrypt.compare(body.password, user.password_hash))) throw new HttpError(401, 'That email and password don’t match. Check them and try again.');
-    setSession(res, user.id);
+    await setSession(req, res, user.id);
     res.json({ user: publicUser(user) });
   });
 

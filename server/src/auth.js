@@ -1,17 +1,25 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'node:crypto';
 
 const COOKIE = 'mochi_session';
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
-export function jwtSecret() {
-  const s = process.env.JWT_SECRET;
-  if (s) return s;
-  if (process.env.NODE_ENV === 'production') throw new Error('JWT_SECRET must be set in production');
-  return 'dev-only-secret-change-me';
+const cachedSecret = new WeakMap(); // per database
+/**
+ * The key that signs session cookies. JWT_SECRET wins if set; otherwise a random key is
+ * generated once and stored in the database, so every server instance shares it.
+ */
+export async function jwtSecret(db) {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (cachedSecret.has(db)) return cachedSecret.get(db);
+  await db.run("INSERT INTO app_settings (key, value) VALUES ('jwt_secret', $1) ON CONFLICT (key) DO NOTHING", [crypto.randomBytes(48).toString('base64url')]);
+  const { value } = await db.one("SELECT value FROM app_settings WHERE key = 'jwt_secret'");
+  cachedSecret.set(db, value);
+  return value;
 }
 
-export function setSession(res, userId) {
-  const token = jwt.sign({ sub: userId }, jwtSecret(), { expiresIn: '30d' });
+export async function setSession(req, res, userId) {
+  const token = jwt.sign({ sub: userId }, await jwtSecret(req.db), { expiresIn: '30d' });
   res.cookie(COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -43,8 +51,9 @@ export function publicUser(u) {
 export async function requireAuth(req, res, next) {
   const token = req.cookies?.[COOKIE];
   if (!token) return res.status(401).json({ error: 'Please sign in to continue.' });
+  const secret = await jwtSecret(req.db);
   let sub;
-  try { ({ sub } = jwt.verify(token, jwtSecret())); } catch {
+  try { ({ sub } = jwt.verify(token, secret)); } catch {
     return res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
   }
   const user = await req.db.one('SELECT * FROM users WHERE id = $1', [sub]);

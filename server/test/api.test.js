@@ -185,3 +185,21 @@ test('seed builds a demo account with a streak', async () => {
   assert.ok(dash.streak >= 12);
   assert.ok((await agent.get('/api/feed')).body.events.length >= 5);
 });
+
+test('works in production without JWT_SECRET, storing one generated key', async () => {
+  const saved = { env: process.env.NODE_ENV, secret: process.env.JWT_SECRET };
+  process.env.NODE_ENV = 'production'; delete process.env.JWT_SECRET;
+  try {
+    const { app, db } = await setup();
+    const agent = request.agent(app);
+    const reg = await agent.post('/api/auth/register').send({ name: 'P', email: 'p@x.dev', password: 'password123' });
+    assert.equal(reg.status, 201);
+    assert.match(reg.headers['set-cookie'][0], /HttpOnly; Secure/);
+    const rows = await db.query("SELECT value FROM app_settings WHERE key = 'jwt_secret'");
+    assert.equal(rows.length, 1);
+    assert.ok(rows[0].value.length >= 60);
+  } finally {
+    process.env.NODE_ENV = saved.env;
+    if (saved.secret) process.env.JWT_SECRET = saved.secret;
+  }
+});
