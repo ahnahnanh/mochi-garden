@@ -35,26 +35,22 @@ export function publicUser(u) {
     avatarColor: u.avatar_color,
     shareActivity: !!u.share_activity,
     nudgesEnabled: !!u.nudges_enabled,
-    createdAt: u.created_at,
+    createdAt: u.created_at instanceof Date ? u.created_at.toISOString() : u.created_at,
   };
 }
 
-/** Attaches req.user, or answers 401. */
-export function requireAuth(db) {
-  const find = db.prepare('SELECT * FROM users WHERE id = ?');
-  return (req, res, next) => {
-    const token = req.cookies?.[COOKIE];
-    if (!token) return res.status(401).json({ error: 'Please sign in to continue.' });
-    try {
-      const { sub } = jwt.verify(token, jwtSecret());
-      const user = find.get(sub);
-      if (!user) return res.status(401).json({ error: 'Your account could not be found. Please sign in again.' });
-      req.user = user;
-      next();
-    } catch {
-      res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
-    }
-  };
+/** Attaches req.user, or answers 401. Expects req.db. */
+export async function requireAuth(req, res, next) {
+  const token = req.cookies?.[COOKIE];
+  if (!token) return res.status(401).json({ error: 'Please sign in to continue.' });
+  let sub;
+  try { ({ sub } = jwt.verify(token, jwtSecret())); } catch {
+    return res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
+  }
+  const user = await req.db.one('SELECT * FROM users WHERE id = $1', [sub]);
+  if (!user) return res.status(401).json({ error: 'Your account could not be found. Please sign in again.' });
+  req.user = user;
+  next();
 }
 
 /** Small in-memory limiter for sign-in attempts. */

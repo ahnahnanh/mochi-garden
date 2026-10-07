@@ -2,14 +2,28 @@
 
 Gentle medication check-ins that help Mochi's garden grow. Every dose you take plants something; every fully completed day makes a flower bloom and extends your streak. An optional community garden lets people cheer each other on without ever sharing medication names or health details.
 
-**Stack:** Node.js + Express API · SQLite (better-sqlite3) · React 19 + Vite · cookie-based JWT sessions.
+**Stack:** Node.js + Express API · Postgres · React 19 + Vite · cookie-based JWT sessions. Deploys to Vercel (static app on the CDN, API as one Vercel Function, database on Neon).
 
-## Quick start
+## Deploy to Vercel
 
-Requires Node.js 20 or newer.
+1. **Import the repo.** In Vercel, choose *Add New → Project* and import `mochi-garden`. Leave the framework preset as *Other*; `vercel.json` already sets the install, build and output settings.
+2. **Add a database.** In the project, open *Storage → Create Database → Neon (Postgres)* and connect it to the project. Pick the **Singapore** region, since the API runs in Singapore (`sin1` in `vercel.json`). This sets `DATABASE_URL` for you. Tables are created automatically on the first request.
+3. **Add a session secret.** Under *Settings → Environment Variables*, add `JWT_SECRET` with a long random value, for example the output of `openssl rand -base64 32`.
+4. **Deploy** (or redeploy if the first build ran before steps 2 and 3). Check `https://<your-app>.vercel.app/api/health` returns `{"ok":true}`.
+5. **Optional demo data.** From your computer, copy the database URL from the Neon integration and run:
+   ```bash
+   DATABASE_URL="postgres://…" npm run seed
+   ```
+   This refuses to run if the database already has accounts. Add `-- --reset` to wipe everything first, which also deletes real accounts.
+
+If `DATABASE_URL` or `JWT_SECRET` is missing, the API answers with a message saying which one to add.
+
+## Run locally
+
+Requires Node.js 20 or newer. No Postgres install needed: without `DATABASE_URL`, the server uses an embedded Postgres (PGlite) stored in `server/data/`.
 
 ```bash
-npm install          # root tools (concurrently)
+npm install          # root tools
 npm run setup        # installs server and client dependencies
 npm run seed         # creates a demo account and a small community
 npm run dev          # API on :3001, web app on http://localhost:5173
@@ -17,21 +31,19 @@ npm run dev          # API on :3001, web app on http://localhost:5173
 
 Sign in with the demo account: **anh@mochi.garden** / **mochigarden**, or create your own account.
 
-### Production
+To run the whole thing as one server (for example on a VPS):
 
 ```bash
-npm run build        # builds the React app into client/dist
-JWT_SECRET=change-me NODE_ENV=production npm start
+npm run build
+DATABASE_URL=postgres://… JWT_SECRET=change-me NODE_ENV=production npm start
 ```
-
-The Express server serves the built app and the API from one port (`PORT`, default 3001).
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `3001` | HTTP port |
-| `JWT_SECRET` | dev-only value | Signs session cookies. **Required** when `NODE_ENV=production`. |
-| `DATABASE_FILE` | `server/data/mochi.db` | SQLite file location |
-| `NODE_ENV` | — | `production` enables secure cookies |
+| `DATABASE_URL` (or `POSTGRES_URL`) | embedded PGlite | Postgres connection string. **Required** on Vercel/production. |
+| `JWT_SECRET` | dev-only value | Signs session cookies. **Required** in production. |
+| `PORT` | `3001` | HTTP port for `npm start` |
+| `PG_POOL_MAX` | `5` | Max Postgres connections per server instance |
 
 ## Features
 
@@ -46,8 +58,10 @@ The Express server serves the built app and the API from one port (`PORT`, defau
 ## Project layout
 
 ```
+api/index.js       Vercel Function entry (wraps the Express app)
+vercel.json        install/build settings and /api rewrites
 server/
-  src/db.js        schema + default groups
+  src/db.js        Postgres schema, pg / PGlite connection
   src/logic.js     dose status, streaks, stats, garden
   src/time.js      time-zone-aware day helpers
   src/app.js       REST API
@@ -83,7 +97,8 @@ Community features only ever see a person's display name, Mochi's colour, that t
 ## Tests
 
 ```bash
-npm test
+npm test                                             # embedded Postgres
+TEST_DATABASE_URL=postgres://… npm test              # a real Postgres (wiped before each test!)
 ```
 
 Covers auth, validation, the check-in flow, snooze/reschedule, streak rules, cross-account access, feed privacy, groups and account deletion.
